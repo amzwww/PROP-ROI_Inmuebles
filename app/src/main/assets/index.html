@@ -138,8 +138,7 @@ details+details{border-top:1px solid var(--line)}
           <div class="grid">
             <label>Provincia<input id="a-province" data-a="province" maxlength="60"></label>
             <label>Municipio<input id="a-municipality" data-a="municipality" maxlength="80"></label>
-            <label>Tipo de vía<select id="a-type" data-a="type"><option value="CL">Calle</option><option value="AV">Avenida</option><option value="PZ">Plaza</option><option value="PS">Paseo</option><option value="RD">Ronda</option><option value="TR">Travesía</option><option value="CM">Camino</option><option value="CR">Carretera</option></select></label>
-            <label>Nombre de la vía<input id="a-street" data-a="street" maxlength="100" placeholder="Ej.: Valencia"></label>
+            <label>Nombre de la vía<input id="a-street" data-a="street" maxlength="100" placeholder="Solo el nombre. Ej.: Valencia"></label>
             <label>Número del portal<input id="a-number" data-a="number" maxlength="10" inputmode="numeric" placeholder="Ej.: 15"></label>
           </div>
           <div class="row"><button id="cat-go" type="button">Consultar Catastro</button></div>
@@ -239,7 +238,7 @@ const DEF=Object.fromEntries([['vacancy',5],...FIELDS.map(f=>[f[1],f[3]])]);
 for(const [host,k,label] of FIELDS)$(host).insertAdjacentHTML('beforeend','<label>'+label+'<input id="p-'+k+'" data-p="'+k+'" type="number" min="0" step="any" inputmode="decimal"></label>');
 
 let db=null,mcp=null,sample=null,docs=new Map(),cur=null,draft=null,dirty=false,saving=false,readOnly=false,saveTimer=0,editSeq=0;
-let catUnits=[],catMsg='',catWarn=false,catBusy=false,catOpen=false,mkMsg='',mkWarn=false,mkBusy=false,anBusy=false;
+let catUnits=[],catStreets=[],catMsg='',catWarn=false,catBusy=false,catOpen=false,mkMsg='',mkWarn=false,mkBusy=false,anBusy=false;
 const HAB='https://www.habitaclia.com';
 const status=t=>{$('status').textContent=t;};
 
@@ -302,7 +301,7 @@ function renderCat(){
  const st=$('cat-status');st.hidden=!catMsg;st.textContent=catMsg;st.className='notice'+(catWarn?' warn':'');
  $('cat-go').disabled=catBusy;$('cat-filter-wrap').hidden=catUnits.length<8;
  const q=up($('cat-filter').value),shown=catUnits.map((u,i)=>[u,i]).filter(([u])=>!q||up([u.bq,u.es,u.pt,u.pu,u.use].join(' ')).includes(q));
- $('cat-results').innerHTML=shown.slice(0,80).map(([u,i])=>'<div class="candidate"><div><strong>'+esc(unitLabel(u))+'</strong><div class="small">'+esc([u.use,u.area?nf(u.area)+' m²':'',u.year].filter(Boolean).join(' · '))+'</div><div class="small rc">'+esc(u.rc)+'</div></div><button type="button" class="secondary" data-u="'+i+'">Elegir esta</button></div>').join('')+(shown.length>80?'<p class="small">Hay más de 80 unidades: filtra por planta o puerta.</p>':'');
+ $('cat-results').innerHTML=(catUnits.length?'':catStreets.map((v,i)=>'<div class="candidate"><div><strong>'+esc(v.tv+' '+v.nv)+'</strong></div><button type="button" class="secondary" data-s="'+i+'">Esta vía</button></div>').join(''))+shown.slice(0,80).map(([u,i])=>'<div class="candidate"><div><strong>'+esc(unitLabel(u))+'</strong><div class="small">'+esc([u.use,u.area?nf(u.area)+' m²':'',u.year].filter(Boolean).join(' · '))+'</div><div class="small rc">'+esc(u.rc)+'</div></div><button type="button" class="secondary" data-u="'+i+'">Elegir esta</button></div>').join('')+(shown.length>80?'<p class="small">Hay más de 80 unidades: filtra por planta o puerta.</p>':'');
 }
 function renderMarket(){
  const d=draft,m=market(d),mk=d.market,sum=$('mk-summary');
@@ -354,7 +353,7 @@ function renderResults(){
  return {b,ss,occ};
 }
 function render(){if(!draft)return;renderCat();renderMarket();renderResults();}
-function open(id){catUnits=[];catMsg='';mkMsg='';catOpen=false;$('cat-filter').value='';cur=id;draft=id?normalize(docs.get(id)):null;dirty=false;$('del-confirm').hidden=true;$('del').hidden=false;renderSel();if(draft){fill();render();}}
+function open(id){catUnits=[];catStreets=[];catMsg='';mkMsg='';catOpen=false;$('cat-filter').value='';cur=id;draft=id?normalize(docs.get(id)):null;dirty=false;$('del-confirm').hidden=true;$('del').hidden=false;renderSel();if(draft){fill();render();}}
 
 /* ---------- guardado (en el propio movil) ---------- */
 const STORE='roi-inmuebles-v1';
@@ -390,31 +389,51 @@ function unitOf(x){
 function pick(u){
  draft.catastro={rc:u.rc,unit:unitLabel(u),use:u.use,area:u.area,year:u.year,cp:u.cp,muni:u.muni||up(draft.addr.municipality),prov:u.prov||up(draft.addr.province),address:u.address};
  if(u.area)draft.area=u.area;
- catUnits=[];catMsg='';catOpen=false;draft.market=null;draft.comps=[];draft.analysis=null;
+ catUnits=[];catStreets=[];catMsg='';catOpen=false;draft.market=null;draft.comps=[];draft.analysis=null;
  touched();fill();searchMarket();
 }
-
-async function lookup(){
+const CAT='https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCallejero.svc/json/';
+const catGet=async(op,params)=>JSON.parse(await httpGet(CAT+op+'?'+new URLSearchParams(params)));
+const catErr=e=>netMsg(e,'Catastro');
+/* Catastro guarda cada via con su propio tipo (CL, AV, PZ...). Se le pregunta por el nombre y el tipo lo pone el. */
+const cleanStreet=s=>up(s).replace(/^(CALLE|CARRER|C\/|AVENIDA|AVINGUDA|AVDA\.?|AVD\.?|AV\.?|PLAZA|PLACA|PZA\.?|PASEO|PASSEIG|RONDA|TRAVESIA|TRAVESSERA|CAMINO|CAMI|CARRETERA|CTRA\.?|RAMBLA|PASAJE|PASSATGE)\s+/,'').replace(/^(DE LA|DE LES|DE LOS|DELS|DEL|DE)\s+/,'').replace(/^D'\s*/,'');
+const catFail=r=>r?.lerr?.length?'Catastro: '+String(r.lerr[0].des||'sin resultados').toLowerCase()+'.':'';
+async function catRun(fn){
  if(!draft||catBusy)return;
- const a=draft.addr,say=(m,w)=>{catMsg=m;catWarn=!!w;renderCat();};catOpen=true;
+ const id=cur,say=(m,w)=>{catMsg=m;catWarn=!!w;if(id===cur)renderCat();};catOpen=true;catBusy=true;
+ try{await fn(id,say);}catch(e){if(id===cur)say(catErr(e),true);}
+ finally{catBusy=false;if(draft&&id===cur)renderCat();}
+}
+async function loadUnits(via,id,say){
+ const a=draft.addr;catStreets=[];catUnits=[];say('Consultando '+via.tv+' '+via.nv+' '+String(a.number).trim()+' en Catastro…');
+ const r=(await catGet('Consulta_DNPLOC',{Provincia:up(a.province),Municipio:up(a.municipality),Sigla:via.tv,Calle:via.nv,Numero:String(a.number).trim()}))?.consulta_dnplocResult;
+ if(id!==cur)return;
+ if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
+ if(r.lerr?.length){const near=[].concat(r.numerero?.nump||[]).map(n=>n.num?.pnp).filter(Boolean);
+  say(catFail(r)+(near.length?' Números que sí existen en esa vía: '+near.slice(0,8).join(', ')+'.':''),true);return;}
+ const list=r.bico?.bi?[r.bico.bi]:[].concat(r.lrcdnp?.rcdnp||[]);
+ catUnits=list.map(unitOf).filter(u=>u.rc.length>=14);
+ if(!catUnits.length){say('Catastro no devuelve inmuebles en esa dirección.',true);return;}
+ if(catUnits.length===1){pick(catUnits[0]);return;}
+ say('Hay '+catUnits.length+' unidades en '+via.tv+' '+via.nv+' '+String(a.number).trim()+'. Elige la tuya.');
+}
+function lookup(){return catRun(async(id,say)=>{
+ const a=draft.addr;catStreets=[];catUnits=[];
  if(!['province','municipality','street','number'].every(k=>String(a[k]||'').trim())){say('Completa provincia, municipio, vía y número.',true);return;}
  if(!/\d/.test(a.number)||/^\d+$/.test(String(a.street).trim())){say('Revisa la dirección: el nombre de la vía y el número del portal parecen cambiados de casilla.',true);return;}
- const url='https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCallejero.svc/json/Consulta_DNPLOC?'+new URLSearchParams({Provincia:up(a.province),Municipio:up(a.municipality),Sigla:a.type||'CL',Calle:up(a.street),Numero:String(a.number).trim()});
- const id=cur;catBusy=true;catUnits=[];say('Consultando Catastro…');
- try{
-  let r=null;try{r=JSON.parse(await httpGet(url))?.consulta_dnplocResult;}catch(e){if(e instanceof SyntaxError)r=null;else throw e;}
-  if(id!==cur)return;
-  if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
-  if(r.lerr?.length){const near=[].concat(r.numerero?.nump||[]).map(n=>n.num?.pnp).filter(Boolean);
-   say('Catastro: '+String(r.lerr[0].des||'sin resultados').toLowerCase()+'.'+(near.length?' Números que sí existen en esa vía: '+near.slice(0,8).join(', ')+'.':''),true);return;}
-  const list=r.bico?.bi?[r.bico.bi]:[].concat(r.lrcdnp?.rcdnp||[]);
-  catUnits=list.map(unitOf).filter(u=>u.rc.length>=14);
-  if(!catUnits.length){say('Catastro no devuelve inmuebles en esa dirección.',true);return;}
-  if(catUnits.length===1){catBusy=false;pick(catUnits[0]);return;}
-  say('Hay '+catUnits.length+' unidades en esa dirección. Elige la tuya.');
- }catch(e){if(id===cur)say(netMsg(e,'Catastro'),true);}
- finally{catBusy=false;if(draft)renderCat();}
-}
+ const name=cleanStreet(a.street);say('Buscando la vía en Catastro…');
+ const r=(await catGet('ObtenerCallejero',{Provincia:up(a.province),Municipio:up(a.municipality),TipoVia:'',NomVia:name}))?.consulta_callejeroResult;
+ if(id!==cur)return;
+ if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
+ if(r.lerr?.length){say(catFail(r),true);return;}
+ let vias=[].concat(r.callejero?.calle||[]).map(c=>c?.dir).filter(v=>v&&v.nv&&v.tv);
+ const exact=vias.filter(v=>key(v.nv)===key(name));if(exact.length)vias=exact;
+ if(!vias.length){say('Catastro no encuentra ninguna vía con ese nombre en '+a.municipality+'.',true);return;}
+ if(vias.length>1){catStreets=vias.slice(0,40);say('Catastro tiene '+vias.length+' vías con ese nombre. Elige la tuya.');return;}
+ await loadUnits(vias[0],id,say);
+});}
+function pickStreet(via){return catRun((id,say)=>loadUnits(via,id,say));}
+
 
 /* ---------- anuncios de alquiler: Habitaclia, y el indice de Fotocasa como respaldo ---------- */
 /* Estos dos textos se ejecutan dentro de la pagina del portal, en el navegador oculto de la app. */
@@ -503,7 +522,7 @@ document.addEventListener('input',e=>{
 });
 $('cat-form').addEventListener('toggle',()=>{catOpen=$('cat-form').open;});
 $('cat-go').addEventListener('click',lookup);
-$('cat-results').addEventListener('click',e=>{const i=e.target.dataset.u;if(i!=null&&catUnits[i])pick(catUnits[i]);});
+$('cat-results').addEventListener('click',e=>{const i=e.target.dataset.u,v=e.target.dataset.s;if(i!=null&&catUnits[i])pick(catUnits[i]);else if(v!=null&&catStreets[v])pickStreet(catStreets[v]);});
 $('rc-copy').addEventListener('click',()=>{try{window.Android.copy(draft.catastro.rc);$('rc-status').textContent='Referencia copiada.';}catch{$('rc-status').textContent='No se pudo copiar: mantén pulsada la referencia para seleccionarla.';}});
 $('mk-go').addEventListener('click',()=>{const mk=draft?.market;searchMarket(mk?.scope==='zone'&&mk.zoneUrl?{name:mk.zone,url:mk.zoneUrl}:undefined);});
 $('mk-zone').addEventListener('change',()=>{const u=$('mk-zone').value,z=(draft.market?.zones||[]).find(x=>x.url===u);searchMarket(z||null);});
