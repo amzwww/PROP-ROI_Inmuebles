@@ -396,8 +396,12 @@ const CAT='https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCallejero.
 const catGet=async(op,params)=>JSON.parse(await httpGet(CAT+op+'?'+new URLSearchParams(params)));
 const catErr=e=>netMsg(e,'Catastro');
 /* Catastro guarda cada via con su propio tipo (CL, AV, PZ...). Se le pregunta por el nombre y el tipo lo pone el. */
-const cleanStreet=s=>up(s).replace(/^(CALLE|CARRER|C\/|AVENIDA|AVINGUDA|AVDA\.?|AVD\.?|AV\.?|PLAZA|PLACA|PZA\.?|PASEO|PASSEIG|RONDA|TRAVESIA|TRAVESSERA|CAMINO|CAMI|CARRETERA|CTRA\.?|RAMBLA|PASAJE|PASSATGE)\s+/,'').replace(/^(DE LA|DE LES|DE LOS|DELS|DEL|DE)\s+/,'').replace(/^D'\s*/,'');
-const catFail=r=>r?.lerr?.length?'Catastro: '+String(r.lerr[0].des||'sin resultados').toLowerCase()+'.':'';
+/* Catastro escribe los nombres en mayusculas y sin tildes, pero conserva la Ç y la Ñ. */
+const catUp=s=>String(s||'').trim().toUpperCase().replace(/Ç/g,'\u0001').replace(/Ñ/g,'\u0002').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\u0001/g,'Ç').replace(/\u0002/g,'Ñ');
+const cleanStreet=s=>catUp(s).replace(/^(CALLE|CARRER|C\/|AVENIDA|AVINGUDA|AVDA\.?|AVD\.?|AV\.?|PLAZA|PLAÇA|PLACA|PZA\.?|PASEO|PASSEIG|RONDA|TRAVESIA|TRAVESSERA|CAMINO|CAMI|CARRETERA|CTRA\.?|RAMBLA|PASAJE|PASSATGE)\s+/,'').replace(/^(DE LA|DE LES|DE LOS|DELS|DEL|DE)\s+/,'').replace(/^D'\s*/,'');
+const catErrs=r=>[].concat(r?.lerr?.err||r?.lerr||[]);
+const catFail=r=>catErrs(r).length?'Catastro: '+String(catErrs(r)[0].des||'sin resultados').toLowerCase()+'.':'';
+const viasOf=r=>[].concat(r?.callejero?.calle||[]).map(c=>c?.dir).filter(v=>v&&v.nv&&String(v.tv||'').trim());
 async function catRun(fn){
  if(!draft||catBusy)return;
  const id=cur,say=(m,w)=>{catMsg=m;catWarn=!!w;if(id===cur)renderCat();};catOpen=true;catBusy=true;
@@ -406,10 +410,10 @@ async function catRun(fn){
 }
 async function loadUnits(via,id,say){
  const a=draft.addr;catStreets=[];catUnits=[];say('Consultando '+via.tv+' '+via.nv+' '+String(a.number).trim()+' en Catastro…');
- const r=(await catGet('Consulta_DNPLOC',{Provincia:up(a.province),Municipio:up(a.municipality),Sigla:via.tv,Calle:via.nv,Numero:String(a.number).trim()}))?.consulta_dnplocResult;
+ const r=(await catGet('Consulta_DNPLOC',{Provincia:catUp(a.province),Municipio:catUp(a.municipality),Sigla:via.tv,Calle:via.nv,Numero:String(a.number).trim()}))?.consulta_dnplocResult;
  if(id!==cur)return;
  if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
- if(r.lerr?.length){const near=[].concat(r.numerero?.nump||[]).map(n=>n.num?.pnp).filter(Boolean);
+ if(catErrs(r).length){const near=[].concat(r.numerero?.nump||[]).map(n=>n.num?.pnp).filter(Boolean);
   say(catFail(r)+(near.length?' Números que sí existen en esa vía: '+near.slice(0,8).join(', ')+'.':''),true);return;}
  const list=r.bico?.bi?[r.bico.bi]:[].concat(r.lrcdnp?.rcdnp||[]);
  catUnits=list.map(unitOf).filter(u=>u.rc.length>=14);
@@ -421,14 +425,21 @@ function lookup(){return catRun(async(id,say)=>{
  const a=draft.addr;catStreets=[];catUnits=[];
  if(!['province','municipality','street','number'].every(k=>String(a[k]||'').trim())){say('Completa provincia, municipio, vía y número.',true);return;}
  if(!/\d/.test(a.number)||/^\d+$/.test(String(a.street).trim())){say('Revisa la dirección: el nombre de la vía y el número del portal parecen cambiados de casilla.',true);return;}
- const name=cleanStreet(a.street);say('Buscando la vía en Catastro…');
- const r=(await catGet('ObtenerCallejero',{Provincia:up(a.province),Municipio:up(a.municipality),TipoVia:'',NomVia:name}))?.consulta_callejeroResult;
+ const name=cleanStreet(a.street),where={Provincia:catUp(a.province),Municipio:catUp(a.municipality),TipoVia:''};say('Buscando la vía en Catastro…');
+ const r=(await catGet('ObtenerCallejero',{...where,NomVia:name}))?.consulta_callejeroResult;
  if(id!==cur)return;
  if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
- if(r.lerr?.length){say(catFail(r),true);return;}
- let vias=[].concat(r.callejero?.calle||[]).map(c=>c?.dir).filter(v=>v&&v.nv&&v.tv);
+ let vias=viasOf(r);
  const exact=vias.filter(v=>key(v.nv)===key(name));if(exact.length)vias=exact;
- if(!vias.length){say('Catastro no encuentra ninguna vía con ese nombre en '+a.municipality+'.',true);return;}
+ if(!vias.length){
+  /* Sin coincidencia: se prueba con el principio de la palabra mas larga y se ofrecen las vias parecidas. */
+  const word=name.split(/\s+/).sort((x,y)=>y.length-x.length)[0]||'';
+  if(word.length>=4){const r2=(await catGet('ObtenerCallejero',{...where,NomVia:word.slice(0,4)}))?.consulta_callejeroResult;if(id!==cur)return;
+   const same=viasOf(r2).filter(v=>key(v.nv)===key(name));
+   if(same.length===1){await loadUnits(same[0],id,say);return;}
+   const near=viasOf(r2).filter(v=>key(v.nv).includes(key(word.slice(0,4))));
+   if(near.length){catStreets=near.slice(0,40);say('Catastro no tiene una vía con ese nombre exacto en '+a.municipality+'. Estas se parecen: elige la tuya o corrige el nombre.',true);return;}}
+  say((catFail(r)||'Catastro no encuentra ninguna vía con ese nombre.')+' Revisa el municipio y el nombre de la vía.',true);return;}
  if(vias.length>1){catStreets=vias.slice(0,40);say('Catastro tiene '+vias.length+' vías con ese nombre. Elige la tuya.');return;}
  await loadUnits(vias[0],id,say);
 });}
