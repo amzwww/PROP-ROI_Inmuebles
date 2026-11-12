@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">ROI Inmuebles</string>
+    <color name="ic_bg">#163C39</color>
+    <color name="app_bg">#F4F5F0</color>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_bg</item>
+        <item name="android:statusBarColor">#163C39</item>
+        <item name="android:navigationBarColor">#F4F5F0</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

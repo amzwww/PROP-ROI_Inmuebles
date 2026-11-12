@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROI Inmuebles</title>
+<style>
+/* Layout: cabecera con selector de análisis; columna izquierda = inmueble y supuestos, columna derecha = alquiler, rentabilidad y análisis. */
+:root{
+  --ink:#163c39; --muted:#516662; --paper:#f4f5f0; --surface:#ffffff; --line:#d4ded8; --field:#b8cac1;
+  --accent:#176456; --accent-fg:#ffffff; --soft:#e8f2ed; --warn:#815315; --warn-bg:#fff5df; --bad:#aa3333; --good:#1c6b3f;
+  --key-bg:#163c39; --key-fg:#ffffff; --track:#edf1ed;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ink:#e3eeea; --muted:#9db0aa; --paper:#101816; --surface:#18221f; --line:#2f3d38; --field:#42544d;
+  --accent:#63c3ae; --accent-fg:#06211c; --soft:#1e2f2a; --warn:#f0c574; --warn-bg:#3a2f17; --bad:#f09a90; --good:#7fd6a4;
+  --key-bg:#63c3ae; --key-fg:#06211c; --track:#24322d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ink:#e3eeea; --muted:#9db0aa; --paper:#101816; --surface:#18221f; --line:#2f3d38; --field:#42544d;
+  --accent:#63c3ae; --accent-fg:#06211c; --soft:#1e2f2a; --warn:#f0c574; --warn-bg:#3a2f17; --bad:#f09a90; --good:#7fd6a4;
+  --key-bg:#63c3ae; --key-fg:#06211c; --track:#24322d; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-block:28px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto}
+header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:24px;flex-wrap:wrap}
+.eyebrow{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-size:34px;line-height:1.15;letter-spacing:-.04em;margin:6px 0 8px;text-wrap:balance}
+h2{font-size:20px;letter-spacing:-.02em;margin:0 0 14px}
+h3{font-size:15px;margin:18px 0 10px}
+p{margin:8px 0}
+.sub{color:var(--muted);max-width:640px}
+.header-actions{display:flex;flex-direction:column;gap:10px;min-width:min(100%,280px)}
+.layout{display:grid;grid-template-columns:minmax(300px,.82fr) minmax(0,1.65fr);gap:22px;align-items:start}
+.layout>div{min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.full{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:500;min-width:0}
+input,select{display:block;width:100%;min-width:0;margin-top:6px;padding:10px 11px;border:1px solid var(--field);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:15px;min-height:43px;font-variant-numeric:tabular-nums}
+input[type=checkbox]{width:18px;min-height:18px;height:18px;margin:0;flex-shrink:0}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button{font:inherit;font-weight:500;border:0;border-radius:8px;padding:10px 14px;cursor:pointer;background:var(--accent);color:var(--accent-fg)}
+button:hover{filter:brightness(.94)}
+button:disabled{opacity:.6;cursor:wait}
+button.secondary{color:var(--accent);background:var(--soft)}
+button.danger{color:var(--bad);background:transparent;padding-inline:0}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+a{color:var(--accent);text-underline-offset:3px;overflow-wrap:anywhere}
+.small{font-size:12px;color:var(--muted)}
+.notice{padding:12px 14px;background:var(--soft);border-radius:9px;font-size:13px;margin:14px 0}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
+.notice strong{font-size:17px;font-variant-numeric:tabular-nums}
+.receipt{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0;overflow-wrap:anywhere}
+.receipt dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;margin:10px 0}
+.receipt dt{color:var(--muted)}
+.receipt dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.rc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em}
+.candidate{border-top:1px solid var(--line);padding:12px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.candidate strong{font-size:14px}
+.candidate button{font-size:12px;padding:8px 10px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0 18px}
+.metric{padding:16px 13px;border-radius:12px;background:var(--soft);min-width:0}
+.metric.key{background:var(--key-bg);color:var(--key-fg)}
+.metric .small{color:inherit;opacity:.85}
+.value{font-size:28px;font-weight:650;line-height:1.3;margin:6px 0;font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.verdict{display:inline-block;font-size:12px;font-weight:600;border-radius:20px;padding:4px 10px;background:var(--soft)}
+.verdict.good{color:var(--good)} .verdict.mid{color:var(--warn);background:var(--warn-bg)} .verdict.bad{color:var(--bad)}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+thead th{color:var(--muted);font-weight:500}
+tbody th{font-weight:500}
+.bar{display:grid;grid-template-columns:78px minmax(0,1fr) 95px;gap:12px;align-items:center;margin:12px 0;font-size:13px}
+.track{height:12px;background:var(--track);border-radius:3px;overflow:hidden}
+.fill{height:100%;background:var(--accent)}
+.fill.negative{background:var(--bad)}
+.amount{text-align:right;font-variant-numeric:tabular-nums}
+summary{cursor:pointer;font-weight:550;padding:10px 0}
+details .grid{margin:12px 0}
+details+details{border-top:1px solid var(--line)}
+.comp{padding:12px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start}
+.comp.off{opacity:.55}
+.comp .price{font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.comp .meta{grid-column:2/-1}
+#an-text{white-space:pre-wrap;font-size:14px;line-height:1.6;margin:12px 0}
+#empty{text-align:left}
+@media(max-width:960px){.layout{grid-template-columns:minmax(0,1fr)}.panel{padding:20px}.wrap{max-width:800px}}
+@media(max-width:520px){h1{font-size:28px}.panel{padding:17px}.grid,.grid.three{grid-template-columns:minmax(0,1fr)}.metrics{grid-template-columns:minmax(0,1fr)}.metric{display:grid;grid-template-columns:1fr auto;gap:0 8px}.metric .small{grid-column:1/-1}.value{grid-column:2;grid-row:1/3;margin:0;font-size:26px}.candidate{grid-template-columns:minmax(0,1fr)}.candidate button{justify-self:start}.bar{grid-template-columns:70px minmax(0,1fr) 88px;gap:8px}.receipt dl{grid-template-columns:minmax(0,1fr)}.receipt dd{text-align:left}.comp{grid-template-columns:auto minmax(0,1fr)}.comp .price{grid-column:2;text-align:left}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Inversión inmobiliaria · uso interno</div>
+      <h1>ROI Inmuebles</h1>
+      <p class="sub">Localiza el inmueble en Catastro, compara con los alquileres anunciados en su zona y comprueba qué rentabilidad deja la compra.</p>
+    </div>
+    <div class="header-actions">
+      <label>Análisis guardados<select id="sel"></select></label>
+      <div class="row"><button id="new" type="button">Nuevo análisis</button><span id="status" class="small" role="status">Cargando…</span></div>
+    </div>
+  </header>
+
+  <section id="empty" class="panel">
+    <h2>Todavía no hay análisis</h2>
+    <p class="sub">Pulsa «Nuevo análisis», ponle nombre, elige el tipo de inmueble y localízalo en Catastro. La app busca los alquileres de la zona y calcula la rentabilidad.</p>
+  </section>
+
+  <div class="layout" id="layout" hidden>
+    <div>
+      <section class="panel">
+        <h2>1. Inmueble</h2>
+        <div class="grid">
+          <label class="full">Nombre<input id="f-name" data-k="name" maxlength="80"></label>
+          <label class="full">Tipo de inmueble<select id="f-type" data-k="type"><option value="home">Vivienda</option><option value="office">Oficina</option><option value="retail">Local comercial</option><option value="industrial">Nave industrial</option></select></label>
+        </div>
+
+        <h3>Catastro</h3>
+        <div id="cat-picked" class="receipt" hidden>
+          <strong id="cp-address"></strong>
+          <dl>
+            <dt>Unidad</dt><dd id="cp-unit"></dd>
+            <dt>Uso catastral</dt><dd id="cp-use"></dd>
+            <dt>Superficie construida</dt><dd id="cp-area"></dd>
+            <dt>Año</dt><dd id="cp-year"></dd>
+            <dt>Referencia catastral</dt><dd id="cp-rc" class="rc"></dd>
+          </dl>
+          <div class="row"><button id="rc-copy" class="secondary" type="button">Copiar referencia</button><a href="https://serpavi.mivau.gob.es/" target="_blank" rel="noopener noreferrer">Alquiler máximo en SERPAVI</a></div>
+          <p id="rc-status" class="small" role="status"></p>
+        </div>
+        <details id="cat-form">
+          <summary id="cat-summary">Buscar el inmueble en Catastro</summary>
+          <div class="grid">
+            <label>Provincia<input id="a-province" data-a="province" maxlength="60"></label>
+            <label>Municipio<input id="a-municipality" data-a="municipality" maxlength="80"></label>
+            <label>Tipo de vía<select id="a-type" data-a="type"><option value="CL">Calle</option><option value="AV">Avenida</option><option value="PZ">Plaza</option><option value="PS">Paseo</option><option value="RD">Ronda</option><option value="TR">Travesía</option><option value="CM">Camino</option><option value="CR">Carretera</option></select></label>
+            <label>Nombre de la vía<input id="a-street" data-a="street" maxlength="100" placeholder="Ej.: Valencia"></label>
+            <label>Número del portal<input id="a-number" data-a="number" maxlength="10" inputmode="numeric" placeholder="Ej.: 15"></label>
+          </div>
+          <div class="row"><button id="cat-go" type="button">Consultar Catastro</button></div>
+          <p id="cat-status" class="notice" role="status" hidden></p>
+          <label id="cat-filter-wrap" hidden>Filtrar por planta, puerta o uso<input id="cat-filter" maxlength="30"></label>
+          <div id="cat-results"></div>
+        </details>
+      </section>
+
+      <section class="panel">
+        <h2>Supuestos de costes</h2>
+        <p id="zero-note" class="notice warn" hidden>IBI, comunidad o seguro están a 0. Rellénalos: sin ellos la rentabilidad neta sale más alta de lo real.</p>
+        <details open><summary>Compra</summary><div class="grid" id="g-initial"></div></details>
+        <details open><summary>Gastos anuales del propietario</summary><div class="grid" id="g-recurring"></div></details>
+        <details><summary>Financiación</summary><div class="grid" id="g-loan"></div></details>
+        <p class="small">El 10 % de impuestos es un supuesto: ajústalo al impuesto real de la operación.</p>
+        <button id="del" class="danger" type="button">Eliminar este análisis</button>
+        <span id="del-confirm" class="row" hidden><span class="small">¿Eliminarlo del todo?</span><button id="del-yes" class="secondary" type="button">Sí, eliminar</button><button id="del-no" class="secondary" type="button">Cancelar</button></span>
+      </section>
+    </div>
+
+    <div>
+      <section class="panel">
+        <h2>2. Alquiler de mercado</h2>
+        <div id="mk-summary" class="notice" role="status"></div>
+        <div class="grid">
+          <label>Ámbito de la comparativa<select id="mk-zone"></select></label>
+          <div class="row" style="align-items:end"><button id="mk-go" class="secondary" type="button">Actualizar anuncios</button></div>
+        </div>
+        <p id="mk-diag" class="small"></p>
+        <details id="mk-details"><summary id="mk-count">Ver los anuncios</summary><div id="comps"></div></details>
+        <details><summary>Ajustes de la renta</summary>
+          <div class="grid three">
+            <label>Negociación (%)<input id="f-adjust" data-k="adjust" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+            <label>Renta manual (€/m²/mes)<input id="f-rateManual" data-k="rateManual" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label>Vacancia e impago (%)<input id="p-vacancy" data-p="vacancy" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+          </div>
+        </details>
+        <p class="small">Mediana de €/m²/mes de los anuncios marcados. Son precios de oferta publicados en Habitaclia, no rentas firmadas. Si no hay anuncios y es una vivienda, se usa el precio medio del municipio que publica Fotocasa.</p>
+      </section>
+
+      <section class="panel">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">3. Rentabilidad de la compra</h2><span id="verdict" class="verdict" hidden></span></div>
+        <div class="grid three" style="margin-top:14px">
+          <label>Precio de compra (€)<input id="f-price" data-k="price" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label>Superficie alquilable (m²)<input id="f-area" data-k="area" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label>Rentabilidad neta objetivo (%)<input id="f-target" data-k="target" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+        </div>
+        <p id="missing" class="notice warn" hidden></p>
+        <div class="metrics">
+          <div class="metric key"><div>Rentabilidad neta</div><div class="value" id="m-net">—</div><div class="small">Sobre la inversión total</div></div>
+          <div class="metric"><div>Rentabilidad bruta</div><div class="value" id="m-gross">—</div><div class="small">Sobre el precio de compra</div></div>
+          <div class="metric"><div>Renta estimada / mes</div><div class="value" id="m-rent">—</div><div class="small" id="m-rate">Pendiente de datos</div></div>
+        </div>
+        <div id="results">
+          <h3>Indicadores de la operación</h3>
+          <div class="table-wrap"><table><tbody id="indicators"></tbody></table></div>
+          <h3>Neto operativo mensual por escenario</h3>
+          <div id="bars" role="img"></div>
+          <div class="table-wrap"><table><thead><tr><th>Escenario</th><th>Renta / mes</th><th>Vacancia</th><th>Neto / año</th><th>Rent. neta</th></tr></thead><tbody id="scen"></tbody></table></div>
+          <p class="small">Prudente: renta −10 %, vacancia +5 puntos, gastos +10 %. Favorable: renta +10 %, vacancia −3 puntos. Antes de IRPF o Impuesto de Sociedades; sin revalorización ni venta.</p>
+          <details><summary>Desglose del cálculo</summary><div class="table-wrap"><table><tbody id="breakdown"></tbody></table></div></details>
+        </div>
+      </section>
+
+
+    </div>
+  </div>
+</main>
+
+<script>
+
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const nf=n=>new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(n);
+const money=n=>Number.isFinite(n)?new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n):'—';
+const pct=n=>Number.isFinite(n)?nf(n)+' %':'—';
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const median=v=>{const a=v.slice().sort((x,y)=>x-y),m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2;};
+const clone=o=>JSON.parse(JSON.stringify(o));
+const up=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase();
+const key=s=>up(s).replace(/[^A-Z0-9]/g,'');
+const slug=s=>up(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const nice=s=>String(s||'').toLowerCase().replace(/(^|[\s\-'(])([a-zà-ÿ])/g,(m,a,b)=>a+b.toUpperCase()).replace(/ (De|Del|La|Las|Los|El|Els|Les|Y|I) /g,m=>m.toLowerCase());
+const fixName=s=>{const m=String(s||'').trim().match(/^(.*\S)\s+\(([^)]+)\)$/);return m?(m[2].endsWith("'")?m[2]+m[1]:m[2]+' '+m[1]):String(s||'').trim();};
+const dateEs=iso=>new Date(iso).toLocaleDateString('es-ES');
+const TYPES={home:['Vivienda','viviendas'],office:['Oficina','oficinas'],retail:['Local comercial','locales_comerciales'],industrial:['Nave industrial','industriales']};
+const FIELDS=[
+ ['g-initial','tax','Impuestos de compra (%)',10],['g-initial','closing','Notaría, registro, gestoría (€)',2000],
+ ['g-initial','works','Reforma y equipamiento (€)',0],['g-initial','initial','Agencia y otros (€)',0],
+ ['g-recurring','ibi','IBI (€/año)',0],['g-recurring','community','Comunidad (€/mes)',0],
+ ['g-recurring','insurance','Seguro (€/año)',0],['g-recurring','otherCosts','Otros costes (€/año)',0],
+ ['g-recurring','maintenance','Mantenimiento (% renta)',5],['g-recurring','management','Gestión (% renta)',0],
+ ['g-loan','ltv','Préstamo (% del precio)',0],['g-loan','interest','Interés anual (%)',3.5],['g-loan','years','Plazo (años)',25]];
+const DEF=Object.fromEntries([['vacancy',5],...FIELDS.map(f=>[f[1],f[3]])]);
+for(const [host,k,label] of FIELDS)$(host).insertAdjacentHTML('beforeend','<label>'+label+'<input id="p-'+k+'" data-p="'+k+'" type="number" min="0" step="any" inputmode="decimal"></label>');
+
+let db=null,mcp=null,sample=null,docs=new Map(),cur=null,draft=null,dirty=false,saving=false,readOnly=false,saveTimer=0,editSeq=0;
+let catUnits=[],catMsg='',catWarn=false,catBusy=false,catOpen=false,mkMsg='',mkWarn=false,mkBusy=false,anBusy=false;
+const HAB='https://www.habitaclia.com';
+const status=t=>{$('status').textContent=t;};
+
+function normalize(d){
+ const o=clone(d||{});
+ o.name=String(o.name||'Sin nombre');o.type=TYPES[o.type]?o.type:'home';
+ o.addr=o.addr&&typeof o.addr==='object'?o.addr:{};
+ o.catastro=o.catastro&&o.catastro.rc?o.catastro:null;
+ o.comps=Array.isArray(o.comps)?o.comps.filter(c=>c&&c.area>0&&c.rent>0).map(c=>({title:String(c.title||'Anuncio'),zone:String(c.zone||''),area:+c.area,rent:+c.rent,url:String(c.url||''),enabled:c.enabled!==false})):[];
+ o.market=o.market&&typeof o.market==='object'?o.market:null;
+ o.params={...DEF,...(o.params&&typeof o.params==='object'?o.params:{})};
+ o.adjust=Number.isFinite(o.adjust)?o.adjust:0;o.rateManual=Number.isFinite(o.rateManual)?o.rateManual:null;
+ o.target=Number.isFinite(o.target)?o.target:5;
+ o.price=Number.isFinite(o.price)?o.price:null;o.area=Number.isFinite(o.area)?o.area:null;
+ o.analysis=o.analysis&&o.analysis.text?o.analysis:null;
+ return o;
+}
+function market(d){
+ const rates=d.comps.filter(c=>c.enabled).map(c=>c.rent/c.area);
+ if(!rates.length)return null;
+ const f=1-(d.adjust||0)/100;
+ return {n:rates.length,rate:median(rates)*f,min:Math.min(...rates)*f,max:Math.max(...rates)*f};
+}
+const indexRate=d=>d.market?.index?.rate>0?d.market.index.rate*(1-(d.adjust||0)/100):null;
+const rateOf=d=>d.rateManual??market(d)?.rate??indexRate(d);
+function calc(d,rate,dr=0,dv=0,dc=0){
+ const s=d.params,rent=d.area*rate*(1+dr/100),potential=rent*12,vacancy=Math.min(100,Math.max(0,s.vacancy+dv)),collected=potential*(1-vacancy/100);
+ const fixed=s.ibi+s.community*12+s.insurance+s.otherCosts,variable=collected*(s.maintenance+s.management)/100,costs=(fixed+variable)*(1+dc/100),net=collected-costs;
+ const taxes=d.price*s.tax/100,extras=s.closing+s.works+s.initial,investment=d.price+taxes+extras,loan=d.price*s.ltv/100,equity=investment-loan,r=s.interest/1200,n=s.years*12;
+ const payment=loan===0?0:r===0?loan/n:loan*r/(-Math.expm1(-n*Math.log1p(r))),cash=net-payment*12;
+ const maxPrice=d.target>0?(net*100/d.target-extras)/(1+s.tax/100):NaN;
+ return {rent,potential,vacancy,collected,fixed,variable,costs,net,taxes,investment,loan,equity,payment,cash,maxPrice,gross:potential/d.price*100,yield:net/investment*100,cashYield:equity>0?cash/equity*100:NaN};
+}
+function problems(d){
+ const miss=[];if(!(d.price>0))miss.push('el precio de compra');if(!(d.area>0))miss.push('la superficie');if(!(rateOf(d)>0))miss.push('la renta de mercado');
+ if(Object.values(d.params).some(v=>!Number.isFinite(v)||v<0))miss.push('un supuesto de costes sin valor');
+ if(d.params.maintenance+d.params.management>100)miss.push('mantenimiento y gestión por debajo del 100 %');
+ return miss;
+}
+
+/* ---------- pintado ---------- */
+function renderSel(){
+ const items=[...docs].sort((a,b)=>String(b[1].createdAt||'').localeCompare(String(a[1].createdAt||'')));
+ $('sel').innerHTML=items.map(([id,d])=>'<option value="'+esc(id)+'"'+(id===cur?' selected':'')+'>'+esc(id===cur&&draft?draft.name:(d.name||'Sin nombre'))+'</option>').join('');
+ $('sel').disabled=!items.length;$('empty').hidden=!!cur;$('layout').hidden=!cur;
+}
+function fill(){
+ const active=document.activeElement;
+ document.querySelectorAll('[data-k]').forEach(el=>{if(el!==active)el.value=draft[el.dataset.k]??'';});
+ document.querySelectorAll('[data-p]').forEach(el=>{if(el!==active)el.value=draft.params[el.dataset.p]??'';});
+ document.querySelectorAll('[data-a]').forEach(el=>{if(el!==active)el.value=draft.addr[el.dataset.a]??(el.tagName==='SELECT'?'CL':'');});
+}
+const unitLabel=u=>[u.bq&&'Bloque '+u.bq,u.es&&'Esc. '+u.es,u.pt&&'Planta '+u.pt,u.pu&&'Puerta '+u.pu].filter(Boolean).join(' · ')||'Unidad única';
+function renderCat(){
+ const d=draft,c=d.catastro;
+ $('cat-picked').hidden=!c;
+ if(c){$('cp-address').textContent=c.address||'';$('cp-unit').textContent=c.unit||'—';$('cp-use').textContent=c.use||'—';$('cp-area').textContent=c.area?nf(c.area)+' m²':'—';$('cp-year').textContent=c.year||'—';$('cp-rc').textContent=c.rc;}
+ $('cat-summary').textContent=c?'Cambiar de dirección o de unidad':'Buscar el inmueble en Catastro';
+ $('cat-form').open=!c||catOpen;
+ const st=$('cat-status');st.hidden=!catMsg;st.textContent=catMsg;st.className='notice'+(catWarn?' warn':'');
+ $('cat-go').disabled=catBusy;$('cat-filter-wrap').hidden=catUnits.length<8;
+ const q=up($('cat-filter').value),shown=catUnits.map((u,i)=>[u,i]).filter(([u])=>!q||up([u.bq,u.es,u.pt,u.pu,u.use].join(' ')).includes(q));
+ $('cat-results').innerHTML=shown.slice(0,80).map(([u,i])=>'<div class="candidate"><div><strong>'+esc(unitLabel(u))+'</strong><div class="small">'+esc([u.use,u.area?nf(u.area)+' m²':'',u.year].filter(Boolean).join(' · '))+'</div><div class="small rc">'+esc(u.rc)+'</div></div><button type="button" class="secondary" data-u="'+i+'">Elegir esta</button></div>').join('')+(shown.length>80?'<p class="small">Hay más de 80 unidades: filtra por planta o puerta.</p>':'');
+}
+function renderMarket(){
+ const d=draft,m=market(d),mk=d.market,sum=$('mk-summary');
+ const where=mk?(mk.scope==='zone'&&mk.zone?mk.zone+', '+mk.place:mk.place||''):'';
+ if(mkMsg){sum.className='notice'+(mkWarn?' warn':'');sum.textContent=mkMsg;}
+ else if(m){sum.className='notice'+(m.n<3?' warn':'');
+  sum.innerHTML='<strong>'+nf(m.rate)+' €/m²/mes</strong> · mediana de '+m.n+' anuncio'+(m.n===1?'':'s')+(where?' en '+esc(where):'')+'<br>Horquilla '+nf(m.min)+'–'+nf(m.max)+' €/m²/mes'+(mk?.checkedAt?' · consultado el '+dateEs(mk.checkedAt):'')+(m.n<3?'<br>Muestra corta: menos de 3 anuncios.':'')+(mk?.note?'<br>'+esc(mk.note):'')+(mk?.index?'<br>Precio medio del municipio según el índice de Fotocasa: '+nf(mk.index.rate)+' €/m²/mes ('+esc(mk.index.month)+').':'')+(d.rateManual!=null?'<br>Se está usando tu renta manual de '+nf(d.rateManual)+' €/m²/mes.':'');}
+ else if(mk?.index&&!d.comps.length){sum.className='notice';
+  sum.innerHTML='<strong>'+nf(indexRate(d))+' €/m²/mes</strong> · precio medio de alquiler de vivienda en '+esc(mk.place)+'<br>Fuente: <a href="'+esc(mk.index.url)+'" target="_blank" rel="noopener noreferrer">índice de precios de Fotocasa</a>, '+esc(mk.index.month)+'. Habitaclia no tiene ahora anuncios de alquiler en el municipio, así que no hay anuncios sueltos que comparar.'+(d.rateManual!=null?'<br>Se está usando tu renta manual de '+nf(d.rateManual)+' €/m²/mes.':'');}
+ else if(mk||d.comps.length){sum.className='notice warn';sum.textContent=d.comps.length?'Ningún anuncio marcado.':'No existen o no encuentro datos para la comparativa.';}
+ else{sum.className='notice';sum.textContent='Los anuncios se buscan solos al elegir el inmueble en Catastro.';}
+ const zones=mk?.zones||[];
+ $('mk-zone').innerHTML='<option value="">Todo el municipio</option>'+zones.map(z=>'<option value="'+esc(z.url)+'"'+(mk.scope==='zone'&&mk.zoneUrl===z.url?' selected':'')+'>'+esc(z.name)+' ('+z.count+')</option>').join('');
+ $('mk-zone').disabled=mkBusy||!zones.length;$('mk-go').disabled=mkBusy;
+ $('mk-details').hidden=!d.comps.length;$('mk-count').textContent='Ver los '+d.comps.length+' anuncios y elegir cuáles cuentan';
+ $('comps').innerHTML=d.comps.map((c,i)=>{const safe=/^https:\/\//i.test(c.url);
+  return '<div class="comp'+(c.enabled?'':' off')+'"><input type="checkbox" id="comp-'+i+'" data-i="'+i+'" aria-label="Incluir '+esc(c.title)+'"'+(c.enabled?' checked':'')+'><div>'+(safe?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+esc(c.title)+'</a>':esc(c.title))+'</div><div class="price">'+money(c.rent)+'/mes</div><div class="meta small">'+nf(c.area)+' m² · '+nf(c.rent/c.area)+' €/m²/mes</div></div>';}).join('');
+ $('mk-diag').textContent=mk?.diag?'Última lectura: '+mk.diag:'';
+ $('f-rateManual').placeholder=m?'Vacío = '+nf(m.rate):indexRate(d)?'Vacío = '+nf(indexRate(d)):'';
+}
+function renderResults(){
+ const d=draft,rate=rateOf(d),miss=problems(d),p=d.params;
+ $('zero-note').hidden=!['ibi','community','insurance'].some(k=>p[k]===0);
+ $('missing').hidden=!miss.length;$('missing').textContent='Para calcular la rentabilidad falta '+miss.join(', ')+'.';
+ $('results').hidden=!!miss.length;$('verdict').hidden=!!miss.length;
+ $('m-rent').textContent=d.area>0&&rate>0?money(d.area*rate):'—';
+ $('m-rate').textContent=d.area>0&&rate>0?nf(d.area)+' m² × '+nf(rate)+' €/m²':'Pendiente de datos';
+ if(miss.length){$('m-net').textContent='—';$('m-gross').textContent='—';return null;}
+ const b=calc(d,rate);
+ $('m-net').textContent=pct(b.yield);$('m-gross').textContent=pct(b.gross);
+ const v=$('verdict'),gap=b.yield-d.target;
+ v.className='verdict '+(gap>=0?'good':gap>=-1?'mid':'bad');
+ v.textContent=gap>=0?'Cumple tu objetivo del '+nf(d.target)+' %':gap>=-1?'Roza tu objetivo del '+nf(d.target)+' %':'Por debajo de tu objetivo del '+nf(d.target)+' %';
+ const denom=b.potential*(1-(p.maintenance+p.management)/100),occ=denom>0?(b.fixed+b.payment*12)/denom*100:NaN;
+ const diff=(b.maxPrice-d.price)/d.price*100;
+ const ind=[['Precio de compra por m²',money(d.price/d.area)],['Inversión total (precio, impuestos y gastos)',money(b.investment)],
+  ['Años de renta bruta para pagar el precio',nf(d.price/b.potential)+' años'],['Recuperación de la inversión con el neto actual',b.net>0?nf(b.investment/b.net)+' años':'No se recupera'],
+  ['Flujo de caja mensual tras la cuota',money(b.cash/12)],['Retorno anual sobre el capital propio',pct(b.cashYield)],
+  ['Ocupación mínima para cubrir gastos y cuota',pct(occ)+(occ>100?' · no alcanzable':'')],
+  ['Precio máximo para lograr el '+nf(d.target)+' % neto',Number.isFinite(b.maxPrice)&&b.maxPrice>0?money(b.maxPrice)+' ('+(diff>=0?'+':'−')+nf(Math.abs(diff))+' % sobre el precio)':'No alcanzable']];
+ if(b.loan>0)ind.splice(6,0,['Cobertura de la deuda (neto ÷ cuotas)',nf(b.net/(b.payment*12))+' veces']);
+ $('indicators').innerHTML=ind.map(([k,v])=>'<tr><th scope="row">'+k+'</th><td>'+v+'</td></tr>').join('');
+ const ss=[['Prudente',calc(d,rate,-10,5,10)],['Base',b],['Favorable',calc(d,rate,10,-3,0)]],max=Math.max(1,...ss.map(x=>Math.abs(x[1].net/12)));
+ $('bars').innerHTML=ss.map(([n,x])=>'<div class="bar"><span>'+n+'</span><div class="track"><div class="fill'+(x.net<0?' negative':'')+'" style="width:'+Math.abs(x.net/12)/max*100+'%"></div></div><span class="amount">'+money(x.net/12)+'</span></div>').join('');
+ $('bars').setAttribute('aria-label',ss.map(([n,x])=>n+': '+money(x.net/12)+' netos al mes').join('; '));
+ $('scen').innerHTML=ss.map(([n,x])=>'<tr><th scope="row">'+n+'</th><td>'+money(x.rent)+'</td><td>'+pct(x.vacancy)+'</td><td>'+money(x.net)+'</td><td>'+pct(x.yield)+'</td></tr>').join('');
+ const rows=[['Precio de compra',money(d.price)],['Impuestos de compra',money(b.taxes)],['Notaría, reforma y otros',money(p.closing+p.works+p.initial)],['Inversión total',money(b.investment)],['Renta potencial / año',money(b.potential)],['Vacancia e impago / año','−'+money(b.potential-b.collected)],['Renta cobrada / año',money(b.collected)],['Gastos fijos / año','−'+money(b.fixed)],['Mantenimiento y gestión / año','−'+money(b.variable)],['Neto operativo / año',money(b.net)],['Préstamo',money(b.loan)],['Capital propio',money(b.equity)],['Cuota del préstamo / mes',money(b.payment)]];
+ $('breakdown').innerHTML=rows.map(([k,v])=>'<tr><th scope="row">'+k+'</th><td>'+v+'</td></tr>').join('');
+ return {b,ss,occ};
+}
+function render(){if(!draft)return;renderCat();renderMarket();renderResults();}
+function open(id){catUnits=[];catMsg='';mkMsg='';catOpen=false;$('cat-filter').value='';cur=id;draft=id?normalize(docs.get(id)):null;dirty=false;$('del-confirm').hidden=true;$('del').hidden=false;renderSel();if(draft){fill();render();}}
+
+/* ---------- guardado (en el propio movil) ---------- */
+const STORE='roi-inmuebles-v1';
+function persist(){try{localStorage.setItem(STORE,JSON.stringify([...docs]));return true;}catch{return false;}}
+function touched(){dirty=true;editSeq++;render();renderSel();clearTimeout(saveTimer);saveTimer=setTimeout(save,500);}
+async function save(){
+ if(!cur||!draft)return;
+ docs.set(cur,{...clone(draft),updatedAt:new Date().toISOString()});dirty=false;
+ status(persist()?'Guardado en el móvil':'No se pudo guardar: el almacenamiento del móvil está lleno.');
+}
+
+/* ---------- puente con la app Android ---------- */
+const pending=new Map();let callSeq=0;
+window.__native=(id,ok,val)=>{const p=pending.get(id);if(!p)return;pending.delete(id);ok?p.res(val):p.rej(new Error(String(val)));};
+const native=(method,...args)=>new Promise((res,rej)=>{
+ if(!window.Android){rej(new Error('sinapp'));return;}
+ const id='c'+(++callSeq);pending.set(id,{res,rej});
+ try{window.Android[method](id,...args);}catch{pending.delete(id);rej(new Error('sinapp'));}
+});
+const httpGet=url=>native('httpGet',url);
+const scrape=(url,script,wait)=>native('scrape',url,script,wait).then(v=>{try{return typeof v==='string'?JSON.parse(v):v;}catch{return null;}});
+function netMsg(e,site){switch(e?.message){
+ case 'sinapp':return 'Esta consulta solo funciona dentro de la app instalada en el móvil.';
+ case 'tiempo':return site+' tarda demasiado en responder. Vuelve a intentarlo.';
+ default:return 'No se pudo consultar '+site+'. Comprueba la conexión y vuelve a intentarlo.';}}
+
+/* ---------- Catastro ---------- */
+function unitOf(x){
+ const rc=x.idbi?.rc||x.rc||{},dt=x.dt||{},lo=dt.locs?.lous?.lourb||{},li=lo.loint||{},dir=lo.dir||{},de=x.debi||{};
+ const address=x.ldt||[[dir.tv,dir.nv,dir.pnp].filter(Boolean).join(' '),[lo.dp,dt.nm].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+ return {rc:['pc1','pc2','car','cc1','cc2'].map(k=>rc[k]||'').join(''),bq:li.bq||'',es:li.es||'',pt:li.pt||'',pu:li.pu||'',use:de.luso||'',area:Number(String(de.sfc||'').replace(',','.'))||null,year:de.ant||'',cp:lo.dp||'',muni:dt.nm||'',prov:dt.np||'',address};
+}
+function pick(u){
+ draft.catastro={rc:u.rc,unit:unitLabel(u),use:u.use,area:u.area,year:u.year,cp:u.cp,muni:u.muni||up(draft.addr.municipality),prov:u.prov||up(draft.addr.province),address:u.address};
+ if(u.area)draft.area=u.area;
+ catUnits=[];catMsg='';catOpen=false;draft.market=null;draft.comps=[];draft.analysis=null;
+ touched();fill();searchMarket();
+}
+
+async function lookup(){
+ if(!draft||catBusy)return;
+ const a=draft.addr,say=(m,w)=>{catMsg=m;catWarn=!!w;renderCat();};catOpen=true;
+ if(!['province','municipality','street','number'].every(k=>String(a[k]||'').trim())){say('Completa provincia, municipio, vía y número.',true);return;}
+ if(!/\d/.test(a.number)||/^\d+$/.test(String(a.street).trim())){say('Revisa la dirección: el nombre de la vía y el número del portal parecen cambiados de casilla.',true);return;}
+ const url='https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCallejero.svc/json/Consulta_DNPLOC?'+new URLSearchParams({Provincia:up(a.province),Municipio:up(a.municipality),Sigla:a.type||'CL',Calle:up(a.street),Numero:String(a.number).trim()});
+ const id=cur;catBusy=true;catUnits=[];say('Consultando Catastro…');
+ try{
+  let r=null;try{r=JSON.parse(await httpGet(url))?.consulta_dnplocResult;}catch(e){if(e instanceof SyntaxError)r=null;else throw e;}
+  if(id!==cur)return;
+  if(!r){say('Catastro no devolvió datos legibles. Vuelve a intentarlo.',true);return;}
+  if(r.lerr?.length){const near=[].concat(r.numerero?.nump||[]).map(n=>n.num?.pnp).filter(Boolean);
+   say('Catastro: '+String(r.lerr[0].des||'sin resultados').toLowerCase()+'.'+(near.length?' Números que sí existen en esa vía: '+near.slice(0,8).join(', ')+'.':''),true);return;}
+  const list=r.bico?.bi?[r.bico.bi]:[].concat(r.lrcdnp?.rcdnp||[]);
+  catUnits=list.map(unitOf).filter(u=>u.rc.length>=14);
+  if(!catUnits.length){say('Catastro no devuelve inmuebles en esa dirección.',true);return;}
+  if(catUnits.length===1){catBusy=false;pick(catUnits[0]);return;}
+  say('Hay '+catUnits.length+' unidades en esa dirección. Elige la tuya.');
+ }catch(e){if(id===cur)say(netMsg(e,'Catastro'),true);}
+ finally{catBusy=false;if(draft)renderCat();}
+}
+
+/* ---------- anuncios de alquiler: Habitaclia, y el indice de Fotocasa como respaldo ---------- */
+/* Estos dos textos se ejecutan dentro de la pagina del portal, en el navegador oculto de la app. */
+const HAB_JS='(function(){try{var q=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};var h=document.querySelector("h1");return JSON.stringify({title:document.title,h1:h?h.innerText:"",arts:q("article").slice(0,80).map(function(a){var l=a.querySelector(\'a[href*="/alquiler/"]\');return {t:(a.innerText||"").slice(0,1500),h:l?l.getAttribute("href"):"",n:a.getAttribute("aria-label")||""};}),links:q(\'a[href*="/alquiler/"]\').slice(0,2500).map(function(a){return {h:a.getAttribute("href")||"",t:(a.innerText||"").trim().slice(0,160),l:(a.getAttribute("aria-label")||a.getAttribute("title")||"").slice(0,160)};})});}catch(e){return JSON.stringify({title:document.title,error:String(e)});}})()';
+const FOTO_JS='(function(){var m=document.querySelector("main")||document.body;return JSON.stringify({title:document.title,text:(m.innerText||"").slice(0,90000)});})()';
+const pathOf=h=>{try{return new URL(h,HAB).pathname;}catch{return '';}};
+function placeOf(page){
+ for(const s of [page?.h1,page?.title]){const m=String(s||'').split('\n')[0].replace(/\s*[-|]\s*habitaclia\s*$/i,'').match(/ en alquiler en (.+)$/);if(m)return m[1].trim();}
+ return '';
+}
+function parseListings(page){
+ const out=[],seen=new Set();
+ for(const a of page?.arts||[]){
+  const lines=String(a.t||'').split('\n').map(s=>s.trim()).filter(Boolean),path=pathOf(a.h);let rent=null,area=null,m;
+  for(const l of lines){
+   if(rent==null&&(m=l.match(/^([\d.]+) ?€\s*\/\s*mes/)))rent=Number(m[1].replace(/\./g,''));
+   else if(area==null&&(m=l.match(/^([\d.]+)(?:,(\d+))? ?m²$/)))area=Number(m[1].replace(/\./g,'')+(m[2]?'.'+m[2]:''));
+  }
+  const title=(a.n||lines.find(l=>l.includes(' en alquiler en '))||'Anuncio').slice(0,140);
+  if(!(rent>0)||!(area>=5)||!path.startsWith('/alquiler/')||seen.has(path))continue;
+  seen.add(path);out.push({title,zone:title.split(' en alquiler en ').pop(),area,rent,url:HAB+path});
+ }
+ return out;
+}
+function parseZones(page,base){
+ const out=[],seen=new Set();
+ for(const a of page?.links||[]){
+  const path=pathOf(a.h);if(!path.startsWith(base+'/')||!path.endsWith('/s')||seen.has(path))continue;
+  const m=[a.l,a.t].map(s=>String(s||'').match(/^Ver ([\d.]+) .+? en alquiler en (.+)$/)).find(Boolean);
+  const name=m?m[2].trim():String(a.t||'').split('\n')[0].trim();if(!name)continue;
+  seen.add(path);out.push({name,count:m?Number(m[1].replace(/\./g,'')):null,url:path});
+ }
+ return out;
+}
+async function fotoIndex(muniRaw){
+ try{
+  const url='https://www.fotocasa.es/es/alquiler/viviendas/'+slug(muniRaw)+'/todas-las-zonas/l';
+  const t=(await scrape(url,FOTO_JS,3500))?.text||'';
+  const m=t.match(/En ([a-zñ]+ de \d{4}), el precio medio de alquiler en (.+?) es de ([\d.]+(?:,\d+)?) €\/m²\/mes/i);
+  if(!m||key(m[2])!==key(muniRaw))return null;
+  const rate=Number(m[3].replace(/\./g,'').replace(',','.'));
+  return rate>0?{rate,month:m[1],url}:null;
+ }catch{return null;}
+}
+/* zoneChoice: {name,url} = barrio elegido; null o nada = todo el municipio */
+async function searchMarket(zoneChoice){
+ if(!draft||mkBusy)return;
+ const id=cur,c=draft.catastro,say=(m,w)=>{mkMsg=m;mkWarn=!!w;if(id===cur)renderMarket();};
+ const muniRaw=fixName(c?.muni||draft.addr.municipality),provRaw=fixName(c?.prov||draft.addr.province);
+ if(!muniRaw||!provRaw){say('Localiza primero el inmueble en Catastro.',true);return;}
+ const place=nice(muniRaw),ts=TYPES[draft.type][1],p=slug(provRaw),m=slug(muniRaw);
+ mkBusy=true;say('Buscando anuncios de alquiler en '+place+'…');
+ try{
+  let base='',page=null;
+  for(const cand of [m,m+'-capital',m+'-'+p]){
+   const path='/alquiler/'+ts+'/'+p+'-provincia/'+cand;page=await scrape(HAB+path+'/s',HAB_JS,2500);if(id!==cur)return;
+   const k=key(placeOf(page));
+   if(k&&(k===key(muniRaw)||k===key(muniRaw)+'CAPITAL')){base=path;break;}
+  }
+  const stamp=new Date().toISOString();
+  const muniList=base?parseListings(page):[],zones=base?parseZones(page,base).slice(0,80):[];
+  let diag=(page?.title||'sin respuesta de Habitaclia')+' · '+(page?.arts?.length||0)+' fichas, '+muniList.length+' con precio y superficie';
+  const zone=zoneChoice||null;
+  let list=muniList,scope='muni',note='';
+  if(zone){say('Buscando anuncios en '+zone.name+'…');const zp=await scrape(HAB+zone.url,HAB_JS,2500);if(id!==cur)return;const zl=parseListings(zp);
+   diag=(zp?.title||'sin respuesta de Habitaclia')+' · '+(zp?.arts?.length||0)+' fichas, '+zl.length+' con precio y superficie';
+   if(zl.length>=3){list=zl;scope='zone';}else note='En '+zone.name+' hay '+zl.length+' anuncio'+(zl.length===1?'':'s')+' con precio y superficie: se usa todo el municipio.';}
+  else if(zones.length&&list.length)note='Para afinar a la zona del inmueble, elige su barrio en «Ámbito de la comparativa».';
+  let index=null;
+  if(draft.type==='home'&&list.length<3){say('Consultando el índice de alquiler de Fotocasa…');index=await fotoIndex(muniRaw);if(id!==cur)return;}
+  draft.comps=list.slice(0,60).map(l=>({...l,enabled:true}));
+  draft.market={scope,zone:scope==='zone'?zone.name:'',zoneUrl:scope==='zone'?zone.url:'',place,zones,checkedAt:stamp,note,index,diag,none:!list.length&&!index};
+  mkMsg='';touched();
+ }catch(e){say(netMsg(e,'los portales de anuncios'),true);}
+ finally{mkBusy=false;if(draft&&id===cur)renderMarket();}
+}
+
+/* ---------- eventos ---------- */
+document.addEventListener('input',e=>{
+ const el=e.target;if(!draft)return;
+ const num=()=>Number.isFinite(el.valueAsNumber)?el.valueAsNumber:null;
+ if(el.dataset.k){const k=el.dataset.k;draft[k]=el.type==='number'?num():el.value;touched();if(k==='type'&&(draft.catastro||draft.market))searchMarket();}
+ else if(el.dataset.p){draft.params[el.dataset.p]=num()??NaN;touched();}
+ else if(el.dataset.a){draft.addr[el.dataset.a]=el.value;touched();}
+ else if(el.id==='cat-filter')renderCat();
+});
+$('cat-form').addEventListener('toggle',()=>{catOpen=$('cat-form').open;});
+$('cat-go').addEventListener('click',lookup);
+$('cat-results').addEventListener('click',e=>{const i=e.target.dataset.u;if(i!=null&&catUnits[i])pick(catUnits[i]);});
+$('rc-copy').addEventListener('click',()=>{try{window.Android.copy(draft.catastro.rc);$('rc-status').textContent='Referencia copiada.';}catch{$('rc-status').textContent='No se pudo copiar: mantén pulsada la referencia para seleccionarla.';}});
+$('mk-go').addEventListener('click',()=>{const mk=draft?.market;searchMarket(mk?.scope==='zone'&&mk.zoneUrl?{name:mk.zone,url:mk.zoneUrl}:undefined);});
+$('mk-zone').addEventListener('change',()=>{const u=$('mk-zone').value,z=(draft.market?.zones||[]).find(x=>x.url===u);searchMarket(z||null);});
+$('comps').addEventListener('change',e=>{const i=e.target.dataset.i;if(i!=null){draft.comps[i].enabled=e.target.checked;touched();}});
+$('sel').addEventListener('change',async()=>{const id=$('sel').value;if(id===cur)return;if(dirty){clearTimeout(saveTimer);await save();}open(id);});
+$('new').addEventListener('click',async()=>{
+ if(dirty){clearTimeout(saveTimer);await save();}
+ const id='a'+Date.now().toString(36),body={name:'Nuevo inmueble',type:'home',addr:{},catastro:null,price:null,area:null,target:5,comps:[],market:null,adjust:0,rateManual:null,params:{...DEF},createdAt:new Date().toISOString()};
+ docs.set(id,body);persist();open(id);$('f-name').focus();$('f-name').select();
+ if(db&&!readOnly){try{await db.doc('analisis/'+id).set(body);status('Guardado');}catch(e){if(e?.code==='invalid_argument'){readOnly=true;status('Solo lectura: tus cambios no se guardan.');}else status('No se pudo guardar el análisis nuevo.');}}
+});
+$('del').addEventListener('click',()=>{$('del').hidden=true;$('del-confirm').hidden=false;});
+$('del-no').addEventListener('click',()=>{$('del').hidden=false;$('del-confirm').hidden=true;});
+$('del-yes').addEventListener('click',async()=>{
+ const id=cur;clearTimeout(saveTimer);dirty=false;
+ if(db&&!readOnly){try{await db.doc('analisis/'+id).delete();}catch{status('No se pudo eliminar.');return;}}
+ docs.delete(id);persist();open(docs.size?[...docs.keys()][0]:null);
+});
+
+
+/* ---------- arranque ---------- */
+function onDocs(){
+ if(cur&&!docs.has(cur)){cur=null;draft=null;}
+ if(!cur&&docs.size){open([...docs].sort((a,b)=>String(b[1].createdAt||'').localeCompare(String(a[1].createdAt||'')))[0][0]);return;}
+ renderSel();
+}
+try{const saved=JSON.parse(localStorage.getItem(STORE)||'[]');if(Array.isArray(saved))docs=new Map(saved);}catch{}
+status(docs.size?'Guardado en el móvil':'');
+onDocs();
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- casa -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54,30 L80,52 L74,52 L74,76 L34,76 L34,52 L28,52 Z" />
+    <!-- barras de rentabilidad -->
+    <path android:fillColor="#176456" android:pathData="M41,70 h6 v-8 h-6 Z M51,70 h6 v-14 h-6 Z M61,70 h6 v-20 h-6 Z" />
+</vector>

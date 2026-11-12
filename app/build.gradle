@@ -1,0 +1,35 @@
+plugins { id 'com.android.application' }
+
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as Integer
+
+android {
+    namespace 'com.jhe.roiinmuebles'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.jhe.roiinmuebles'
+        minSdk 26
+        targetSdk 34
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+    // Firma fija para que cada version nueva se instale encima de la anterior sin perder los datos.
+    signingConfigs {
+        release {
+            storeFile rootProject.file('keystore/roi.jks')
+            storePassword '0x7I9mKYt2Wkn3ILiRw1'
+            keyAlias 'roi'
+            keyPassword '0x7I9mKYt2Wkn3ILiRw1'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
